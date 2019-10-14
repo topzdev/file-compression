@@ -61,7 +61,7 @@ void decompress(char file_path[]){
 
     retrieve = fopen(strcat(file_path,".huf"), "rb");
     retVar = fopen(strcat(file_path,".var"), "rb");
-    orig = fopen(strcat(file_path,".org"),"rb");
+    orig = fopen(strcat(file_path,".org"),"wb");
     if(retrieve != NULL && retVar != NULL){
         int ch;
         char bin[255];
