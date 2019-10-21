@@ -10,21 +10,20 @@
 //For Binary Search Tree
 typedef struct bsnode {
    int data;
-   char bin[50];
-   struct bsnode *leftChild;
-   struct bsnode *rightChild;
+   char bin[255];
+   struct bsnode *left, *right;
 } BSTREE;
 
 //For Huffman Code Tree
 typedef struct node{
 	char data;
-	unsigned int freq;
+	int freq;
 	struct node *left, *right;
 }TREE;
 
 typedef struct nodeArr{
-	unsigned int size;
-	unsigned int capacity;
+	int size;
+	int capacity;
 	struct node** array;
 }TREE_ARR;
 
@@ -40,18 +39,15 @@ char huffcode_bin[255][50];
 FILE *file, *store, *temp_file, *orig_file;
 
 //Functions prototype
-TREE* newNode(const char, unsigned);
-TREE_ARR* createMinHeap(unsigned);
-TREE *extractDataMin(TREE_ARR*);
+TREE* huff_node(const char, int);
+TREE_ARR* huff_branch(int);
+TREE *node_min_freq(TREE_ARR*);
 TREE *build_huffman_tree(char[], int[], int);
-TREE_ARR *createAndBuildMinHeap(char[], int[], int);
-void buildMinHeap(TREE_ARR*);
+TREE_ARR *generate_huff_branch(char[], int[], int);
+void build_node(TREE_ARR*);
 void get_huffcode(TREE*, int[], int);
-void insertMinHeap(TREE_ARR*,TREE*);
-int isSizeOne(TREE_ARR*);
-void minHeapify(TREE_ARR*, int);
-void insertMinHeap(TREE_ARR*,TREE*);
-void buildMinHeap(TREE_ARR*);
+void insert_node_to_branch(TREE_ARR*,TREE*);
+void connect_branches(TREE_ARR*, int);
 void build_huffman(char[], int[], int);
 
 //Utilies and compression function
@@ -85,7 +81,7 @@ int main(){
 }
 
 void extract_data(char file_path[]){
-    unsigned int ch[255], freqArr[255] , size = 0, idx = 0, i, temp;
+    unsigned int ch[255], freqArr[255] , size = 0, char_count = 0, i, temp;
     char str[2], charArr[255];
     float freq = 0, total = 0 ;
 
@@ -113,16 +109,16 @@ void extract_data(char file_path[]){
             freq = (float)ch[i]/size * 100;
             total += freq;
 
-            freqArr[idx] = ch[i];
-            charArr[idx] = i;
-            idx++;
+            freqArr[char_count] = ch[i];
+            charArr[char_count] = i;
+            char_count++;
         }
     }
     printf("\nBuilding the huffman binary code...");
-    build_huffman(charArr, freqArr, idx);
+    build_huffman(charArr, freqArr, char_count);
     fclose(file);
     printf("\nFile compressing...");
-    compress_data(file_path, idx);
+    compress_data(file_path, char_count);
     printf("\nFile sucessfully compressed...");
 }
 
@@ -169,20 +165,20 @@ void compress_data(char file_path[], int total_char){
 
 }
 
-TREE* newNode(const char data, unsigned freq){
-	TREE* temp = (TREE*)malloc(sizeof(TREE));
-	temp->left = temp->right = NULL;
-	temp->data = data;
-	temp->freq = freq;
-	return temp;
+TREE* huff_node(const char data, int freq){
+	TREE* node = (TREE*)malloc(sizeof(TREE));
+	node->left = node->right = NULL;
+	node->data = data;
+	node->freq = freq;
+	return node;
 }
 
-TREE_ARR* createMinHeap(unsigned capacity){
-	TREE_ARR* minHeap = (TREE_ARR*)malloc(sizeof(TREE_ARR));
-	minHeap->size = 0;
-	minHeap->capacity = capacity;
-	minHeap->array = (TREE**)malloc(minHeap->capacity * sizeof(TREE*));
-	return minHeap;
+TREE_ARR* huff_branch(int capacity){
+	TREE_ARR* node = (TREE_ARR*)malloc(sizeof(TREE_ARR));
+	node->size = 0;
+	node->capacity = capacity;
+	node->array = (TREE**)malloc(node->capacity * sizeof(TREE*));
+	return node;
 }
 
 void build_huffman(char data[], int freq[], int size){
@@ -196,42 +192,63 @@ void build_huffman(char data[], int freq[], int size){
 
 TREE *build_huffman_tree(char data[], int freq[], int size){
 	TREE *left, *right, *top;
-	TREE_ARR* minHeap = createAndBuildMinHeap(data, freq, size);
-	while (!isSizeOne(minHeap)) {
-		left = extractDataMin(minHeap);
-		right = extractDataMin(minHeap);
-		top = newNode('$', left->freq + right->freq);
+	TREE_ARR* huff_branch = generate_huff_branch(data, freq, size);
+	while (huff_branch->size != 1) {
+		left = node_min_freq(huff_branch);
+		right = node_min_freq(huff_branch);
+		top = huff_node('$', left->freq + right->freq);
 
 		top->left = left;
 		top->right = right;
 
-		insertMinHeap(minHeap, top);
+		insert_node_to_branch(huff_branch, top);
 	}
 
-	return extractDataMin(minHeap);
+	return node_min_freq(huff_branch);
 }
 
-void insertMinHeap(TREE_ARR* minHeap,TREE* minHeapNode){
-	++minHeap->size;
-	int i = minHeap->size - 1;
+TREE_ARR *generate_huff_branch(char data[], int freq[], int size){
 
-	while (i && minHeapNode->freq < minHeap->array[(i - 1) / 2]->freq) {
+	TREE_ARR* minHeap = huff_branch(size);
 
-		minHeap->array[i] = minHeap->array[(i - 1) / 2];
+	for (int i = 0; i < size; ++i){
+		minHeap->array[i] = huff_node(data[i], freq[i]);
+	}
+	minHeap->size = size;
+	build_node(minHeap);
+
+	return minHeap;
+}
+
+void build_node(TREE_ARR* node){
+
+	int n = node->size - 1;
+	int i;
+
+	for (i = (n - 1) / 2; i >= 0; --i){
+		connect_branches(node, i);
+    }
+}
+
+void insert_node_to_branch(TREE_ARR* node,TREE* value){
+	++node->size;
+	int i = node->size - 1;
+
+	while (i && value->freq < node->array[(i - 1) / 2]->freq) {
+
+		node->array[i] = node->array[(i - 1) / 2];
 		i = (i - 1) / 2;
 	}
 
-	minHeap->array[i] = minHeapNode;
+	node->array[i] = value;
 }
 
-TREE *extractDataMin(TREE_ARR* minHeap){
+TREE *node_min_freq(TREE_ARR* node){
 
-	TREE* temp = minHeap->array[0];
-	minHeap->array[0]
-		= minHeap->array[minHeap->size - 1];
-
-	--minHeap->size;
-	minHeapify(minHeap, 0);
+	TREE* temp = node->array[0];
+	node->array[0] = node->array[node->size - 1];
+	--node->size;
+	connect_branches(node, 0);
 
 	return temp;
 }
@@ -287,61 +304,30 @@ int bin_to_dec (int n){
     return decimalNumber;
 }
 
-void swapMinHeapNode(TREE** a, TREE** b){
-
+void swap_branch(TREE** a, TREE** b){
 	TREE* t = *a;
 	*a = *b;
 	*b = t;
 }
 
-void minHeapify(TREE_ARR* minHeap, int idx){
+void connect_branches(TREE_ARR* branch, int idx){
 
 	int smallest = idx;
 	int left = 2 * idx + 1;
 	int right = 2 * idx + 2;
 
-	if (left < minHeap->size && minHeap->array[left]->freq < minHeap->array[smallest]->freq){
+	if (left < branch->size && branch->array[left]->freq < branch->array[smallest]->freq){
         smallest = left;
 	}
 
-	if (right < minHeap->size && minHeap->array[right]->freq < minHeap->array[smallest]->freq){
+	if (right < branch->size && branch->array[right]->freq < branch->array[smallest]->freq){
         smallest = right;
 	}
 
 	if (smallest != idx) {
-		swapMinHeapNode(&minHeap->array[smallest],&minHeap->array[idx]);
-		minHeapify(minHeap, smallest);
+		swap_branch(&branch->array[smallest],&branch->array[idx]);
+		connect_branches(branch, smallest);
 	}
-}
-
-int isSizeOne(TREE_ARR* minHeap){
-	return (minHeap->size == 1);
-}
-
-TREE_ARR *createAndBuildMinHeap(char data[], int freq[], int size){
-
-	TREE_ARR* minHeap = createMinHeap(size);
-
-	for (int i = 0; i < size; ++i){
-		minHeap->array[i] = newNode(data[i], freq[i]);
-	}
-	minHeap->size = size;
-	buildMinHeap(minHeap);
-
-	return minHeap;
-}
-
-void buildMinHeap(TREE_ARR* minHeap){
-
-	int n = minHeap->size - 1;
-	int i;
-
-	for (i = (n - 1) / 2; i >= 0; --i)
-		minHeapify(minHeap, i);
-}
-
-int isLeaf(TREE* root){
-	return !(root->left) && !(root->right);
 }
 
 void set_to_blank(){
@@ -366,7 +352,7 @@ void get_huffcode(TREE* root, int arr[], int top){
 		get_huffcode(root->right, arr, top + 1);
 	}
 
-	if (isLeaf(root)) {
+	if (!(root->left) && !(root->right)) {
         for (i = 0; i < top; i++){
             temp[i] = arr[i]+'0';
         }
@@ -395,8 +381,8 @@ void insert(int x, const char bin[]) {
 
    newNode->data = x;
    strcpy(newNode->bin, bin);
-   newNode->leftChild = NULL;
-   newNode->rightChild = NULL;
+   newNode->left = NULL;
+   newNode->right = NULL;
    //if BSTREE is empty
    if(bsr == NULL) {
       bsr = newNode;
@@ -409,20 +395,20 @@ void insert(int x, const char bin[]) {
 
          //go to left of the BSTREE
          if(x < parent->data) {
-            current = current->leftChild;
+            current = current->left;
 
             //insert to the left
             if(current == NULL) {
-               parent->leftChild = newNode;
+               parent->left = newNode;
                return;
             }
          }  //go to right of the BSTREE
          else {
-            current = current->rightChild;
+            current = current->right;
 
             //insert to the right
             if(current == NULL) {
-               parent->rightChild = newNode;
+               parent->right = newNode;
                return;
             }
          }
@@ -438,11 +424,11 @@ char* search(int x) {
 
       //go to left BSTREE
       if(current->data > x) {
-         current = current->leftChild;
+         current = current->left;
       }
       //else go to right BSTREE
       else {
-         current = current->rightChild;
+         current = current->right;
       }
 
       //not found
