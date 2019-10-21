@@ -40,7 +40,6 @@ FILE *file, *store, *temp_file, *orig_file;
 
 //Functions prototype
 TREE* huff_node(const char, int);
-TREE_ARR* huff_branch(int);
 TREE *node_min_freq(TREE_ARR*);
 TREE *build_huffman_tree(char[], int[], int);
 TREE_ARR *generate_huff_branch(char[], int[], int);
@@ -173,14 +172,6 @@ TREE* huff_node(const char data, int freq){
 	return node;
 }
 
-TREE_ARR* huff_branch(int capacity){
-	TREE_ARR* node = (TREE_ARR*)malloc(sizeof(TREE_ARR));
-	node->size = 0;
-	node->capacity = capacity;
-	node->array = (TREE**)malloc(node->capacity * sizeof(TREE*));
-	return node;
-}
-
 void build_huffman(char data[], int freq[], int size){
 	TREE* root = build_huffman_tree(data, freq, size);
 
@@ -209,16 +200,20 @@ TREE *build_huffman_tree(char data[], int freq[], int size){
 
 TREE_ARR *generate_huff_branch(char data[], int freq[], int size){
 
-	TREE_ARR* minHeap = huff_branch(size);
+	TREE_ARR* node = (TREE_ARR*)malloc(sizeof(TREE_ARR));
+	node->size = 0;
+	node->capacity = size;
+	node->array = (TREE**)malloc(node->capacity * sizeof(TREE*));
 
 	for (int i = 0; i < size; ++i){
-		minHeap->array[i] = huff_node(data[i], freq[i]);
+		node->array[i] = huff_node(data[i], freq[i]);
 	}
-	minHeap->size = size;
-	build_node(minHeap);
+	node->size = size;
+	build_node(node);
 
-	return minHeap;
+	return node;
 }
+
 
 void build_node(TREE_ARR* node){
 
@@ -329,6 +324,7 @@ void connect_branches(TREE_ARR* branch, int idx){
 		connect_branches(branch, smallest);
 	}
 }
+
 
 void set_to_blank(){
     int i;
