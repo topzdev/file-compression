@@ -2,8 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
+#include <time.h>
+#include <math.h>
 #define MAX 100
-
+#define FILE_EXTENSION ".hufzip"
+#define TEMP_FILE "temp.huftmp"
+//For Binary Search Tree
 typedef struct bsnode {
    int data;
    char bin[50];
@@ -11,6 +15,7 @@ typedef struct bsnode {
    struct bsnode *rightChild;
 } BSTREE;
 
+//For Huffman Code Tree
 typedef struct node{
 	char data;
 	unsigned int freq;
@@ -29,23 +34,37 @@ BSTREE *bsr;
 char* search(int x);
 
 int arr[MAX];
-char decoded[255][50];
+char huffcode_bin[255][50];
 
-TREE* newNode(const char data, unsigned freq){
-	TREE* temp = (TREE*)malloc(sizeof(TREE));
-	temp->left = temp->right = NULL;
-	temp->data = data;
-	temp->freq = freq;
-	return temp;
-}
+//File handling identifiest
+FILE *file, *store, *temp_file, *orig_file;
 
-TREE_ARR* createMinHeap(unsigned capacity){
-	TREE_ARR* minHeap = (TREE_ARR*)malloc(sizeof(TREE_ARR));
-	minHeap->size = 0;
-	minHeap->capacity = capacity;
-	minHeap->array = (TREE**)malloc(minHeap->capacity * sizeof(TREE*));
-	return minHeap;
-}
+//Functions prototype
+TREE* newNode(const char, unsigned);
+TREE_ARR* createMinHeap(unsigned);
+TREE *extractDataMin(TREE_ARR*);
+TREE *build_huffman_tree(char[], int[], int);
+TREE_ARR *createAndBuildMinHeap(char[], int[], int);
+void buildMinHeap(TREE_ARR*);
+void get_huffcode(TREE*, int[], int);
+void insertMinHeap(TREE_ARR*,TREE*);
+int isSizeOne(TREE_ARR*);
+void minHeapify(TREE_ARR*, int);
+void insertMinHeap(TREE_ARR*,TREE*);
+void buildMinHeap(TREE_ARR*);
+void build_huffman(char[], int[], int);
+
+//Utilies and compression function
+void makeNull();
+void set_to_blank();
+void display_decoded();
+void extract_data(char[]);
+void compress_data(char[], int);
+int bin_to_dec (int);
+int char_to_bin(const char[]);
+void convert_to_bits(const char[]);
+//Binary Search Tree
+void insert(int x, const char bin[]);
 
 void makeNull(){
     root = NULL;
@@ -53,16 +72,19 @@ void makeNull(){
 
 int main(){
     makeNull();
-    char filePath[50];
-    printf("Enter the filepath here: ");
-    scanf("%s", &filePath);
-    extract(filePath);
+    char file_path[50];
+    printf("Enter the file_path here: ");
+    scanf("%s", &file_path);
+    clock_t begin = clock();
+    extract_data(file_path);
+    clock_t end = clock();
+    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+    printf("\nTotal time of compression is: %f seconds\n", time_spent);
+
     return 0;
 }
 
-FILE *file, *store, *var;
-
-void extract(char file_path[]){
+void extract_data(char file_path[]){
     unsigned int ch[255], freqArr[255] , size = 0, idx = 0, i, temp;
     char str[2], charArr[255];
     float freq = 0, total = 0 ;
@@ -85,91 +107,185 @@ void extract(char file_path[]){
         }
 
     }
-    printf("\tASC\tChar\tFreq\tCalc\n");
+
     for(i = 0; i < 255; i++){
         if(ch[i] != 0){
-            if(i == 10){
-               strcpy(str, "NL");
-            }else if(i == 9){
-                strcpy(str, "TB");
-            }else if(i == 32){
-                strcpy(str, "SP");
-            }else{
-                str[0] = i;
-                str[1] = 32;
-            }
             freq = (float)ch[i]/size * 100;
             total += freq;
 
             freqArr[idx] = ch[i];
             charArr[idx] = i;
             idx++;
-            printf("\t%i\t%s\t%i\t%5.3f\n",i,str, ch[i], freq);
         }
     }
-
-    for(i = 0; i < idx; i++){
-        printf("\t'%c' = %d \n", charArr[i], freqArr[i]);
-    }
-    printf("\n\tTotal Frequency %.2f\n",total);
-    HuffmanCodes(charArr, freqArr, idx);
+    printf("\nBuilding the huffman binary code...");
+    build_huffman(charArr, freqArr, idx);
     fclose(file);
-
-    compress(file_path);
+    printf("\nFile compressing...");
+    compress_data(file_path, idx);
+    printf("\nFile sucessfully compressed...");
 }
 
-
-void compress(const char filePath[]){
+void compress_data(char file_path[], int total_char){
     int i;
-    char bin[255];
     char temp;
-    file = fopen(filePath, "r");
-    store = fopen(strcat(filePath,".huf"), "wb");
-    var = fopen(strcat(filePath,".var"), "wb");
+    file = fopen(file_path, "r");
+    store = fopen(strcat(file_path,FILE_EXTENSION), "wb");
+    temp_file = fopen(TEMP_FILE,"w");
+    orig_file = fopen(file_path,"w");
     if(file == NULL){
         printf("File not found\n");
         return;
     }else{
         //savefirst the letter and binary
+
+        fprintf(store,"%c",total_char);
         for(i = 0; i < 255; i++){
-           if(strcmp(decoded[i], "") != 0){
-                printf("%d %s \n",i, decoded[i]);
-                fprintf(var, "%d %s ", i, decoded[i]);
+           if(strcmp(huffcode_bin[i], "") != 0){
+                fputc(i,store);
+                //fprintf(store,"%s ",huffcode_bin[i]);
            }
         }
+        for(i = 0; i < 255; i++){
+           if(strcmp(huffcode_bin[i], "") != 0){
+                fprintf(store,"%s ",huffcode_bin[i]);
+           }
+        }
+        fclose(store);
 
         while(!feof(file)){
           temp = fgetc(file);
-          if(temp != NULL){
-            //strcpy(bin, search(temp));
-              fprintf(store,"%s",search(temp));
-              //printf("%s", search(temp));
-              //printf("%c", temp);
-          }
+          fprintf(temp_file,"%s",search(temp));
+
+        }
+        fclose(temp_file);
+        convert_to_bits(file_path);
+
+    }
+
+    fclose(file);
+    fclose(orig_file);
+    remove(TEMP_FILE);
+
+}
+
+TREE* newNode(const char data, unsigned freq){
+	TREE* temp = (TREE*)malloc(sizeof(TREE));
+	temp->left = temp->right = NULL;
+	temp->data = data;
+	temp->freq = freq;
+	return temp;
+}
+
+TREE_ARR* createMinHeap(unsigned capacity){
+	TREE_ARR* minHeap = (TREE_ARR*)malloc(sizeof(TREE_ARR));
+	minHeap->size = 0;
+	minHeap->capacity = capacity;
+	minHeap->array = (TREE**)malloc(minHeap->capacity * sizeof(TREE*));
+	return minHeap;
+}
+
+void build_huffman(char data[], int freq[], int size){
+	TREE* root = build_huffman_tree(data, freq, size);
+
+	int top = 0;
+	set_to_blank();
+	get_huffcode(root, arr, top);
+	display_decoded();
+}
+
+TREE *build_huffman_tree(char data[], int freq[], int size){
+	TREE *left, *right, *top;
+	TREE_ARR* minHeap = createAndBuildMinHeap(data, freq, size);
+	while (!isSizeOne(minHeap)) {
+		left = extractDataMin(minHeap);
+		right = extractDataMin(minHeap);
+		top = newNode('$', left->freq + right->freq);
+
+		top->left = left;
+		top->right = right;
+
+		insertMinHeap(minHeap, top);
+	}
+
+	return extractDataMin(minHeap);
+}
+
+void insertMinHeap(TREE_ARR* minHeap,TREE* minHeapNode){
+	++minHeap->size;
+	int i = minHeap->size - 1;
+
+	while (i && minHeapNode->freq < minHeap->array[(i - 1) / 2]->freq) {
+
+		minHeap->array[i] = minHeap->array[(i - 1) / 2];
+		i = (i - 1) / 2;
+	}
+
+	minHeap->array[i] = minHeapNode;
+}
+
+TREE *extractDataMin(TREE_ARR* minHeap){
+
+	TREE* temp = minHeap->array[0];
+	minHeap->array[0]
+		= minHeap->array[minHeap->size - 1];
+
+	--minHeap->size;
+	minHeapify(minHeap, 0);
+
+	return temp;
+}
+
+void convert_to_bits(const char file_name[]){
+    int i;
+    char binValue[8];
+    store = fopen(file_name,"ab");
+    temp_file = fopen(TEMP_FILE,"r");
+    int temp;
+    if(temp_file != NULL){
+        while(!feof(temp_file)){
+            for(i = 0; i<8; i++){
+                temp =   fgetc(temp_file);
+                if(temp == -1){
+                    break;
+                }
+                binValue[i] = (char)temp;
+            }
+            binValue[8] = '\0';
+            if(strcmp(binValue, "")!=0){
+                fprintf(store,"%c",char_to_bin(binValue));
+                strcpy(binValue, "");
+            }
         }
 
 
+    } else{
+        printf("no file found");
     }
-    getch();
-     //printf("The encoded data: %s", encoded);
-    fclose(var);
-    fclose(file);
+    fclose(temp_file);
     fclose(store);
+}
 
+int char_to_bin(const char bits_8[]){
+    int i = 0, value=0;
+    int tempBin;
+    value = atoi(bits_8);
+    tempBin = bin_to_dec (value);
+    return tempBin;
 
 }
 
-void printstringasbinary(char* s)
-{
-    char output[9];
-    while (*s)
+int bin_to_dec (int n){
+    int decimalNumber = 0, i = 0, remainder;
+    while (n!=0)
     {
-        itoa(*s, output, 2);
-        puts(output);
-        ++s;
+        remainder = n%10;
+        n /= 10;
+        decimalNumber += remainder*pow(2,i);
+        ++i;
     }
+    return decimalNumber;
 }
-
 
 void swapMinHeapNode(TREE** a, TREE** b){
 
@@ -202,18 +318,6 @@ int isSizeOne(TREE_ARR* minHeap){
 	return (minHeap->size == 1);
 }
 
-TREE *extractMin(TREE_ARR* minHeap){
-
-	TREE* temp = minHeap->array[0];
-	minHeap->array[0]
-		= minHeap->array[minHeap->size - 1];
-
-	--minHeap->size;
-	minHeapify(minHeap, 0);
-
-	return temp;
-}
-
 TREE_ARR *createAndBuildMinHeap(char data[], int freq[], int size){
 
 	TREE_ARR* minHeap = createMinHeap(size);
@@ -225,35 +329,6 @@ TREE_ARR *createAndBuildMinHeap(char data[], int freq[], int size){
 	buildMinHeap(minHeap);
 
 	return minHeap;
-}
-
-TREE *buildHuffmanTree(char data[], int freq[], int size){
-	TREE *left, *right, *top;
-	TREE_ARR* minHeap = createAndBuildMinHeap(data, freq, size);
-	while (!isSizeOne(minHeap)) {
-		left = extractMin(minHeap);
-		right = extractMin(minHeap);
-		top = newNode('$', left->freq + right->freq);
-
-		top->left = left;
-		top->right = right;
-
-		insertMinHeap(minHeap, top);
-	}
-	return extractMin(minHeap);
-}
-
-void insertMinHeap(TREE_ARR* minHeap,TREE* minHeapNode){
-	++minHeap->size;
-	int i = minHeap->size - 1;
-
-	while (i && minHeapNode->freq < minHeap->array[(i - 1) / 2]->freq) {
-
-		minHeap->array[i] = minHeap->array[(i - 1) / 2];
-		i = (i - 1) / 2;
-	}
-
-	minHeap->array[i] = minHeapNode;
 }
 
 void buildMinHeap(TREE_ARR* minHeap){
@@ -268,33 +343,27 @@ void buildMinHeap(TREE_ARR* minHeap){
 int isLeaf(TREE* root){
 	return !(root->left) && !(root->right);
 }
-void HuffmanCodes(const char data[], int freq[], int size){
-	TREE* root = buildHuffmanTree(data, freq, size);
 
-	int top = 0;
-	setToBlank();
-	printCodes(root, arr, top);
-	showDecoded();
-}
-void setToBlank(){
+void set_to_blank(){
     int i;
     for(i = 0; i<255; i++){
-        strcpy(decoded[i], "");
+        strcpy(huffcode_bin[i], "");
     }
 }
-void printCodes(TREE* root, int arr[], int top){
+
+void get_huffcode(TREE* root, int arr[], int top){
 
     int i;
     char temp[50];
 
 	if (root->left) {
 		arr[top] = 0;
-		printCodes(root->left, arr, top + 1);
+		get_huffcode(root->left, arr, top + 1);
 	}
 
 	if (root->right) {
 		arr[top] = 1;
-		printCodes(root->right, arr, top + 1);
+		get_huffcode(root->right, arr, top + 1);
 	}
 
 	if (isLeaf(root)) {
@@ -302,19 +371,19 @@ void printCodes(TREE* root, int arr[], int top){
             temp[i] = arr[i]+'0';
         }
         temp[top] = '\0';
-        strcpy(decoded[(int)root->data], temp);
+        strcpy(huffcode_bin[(int)root->data], temp);
 	}
 }
 
-void showDecoded(){
+void display_decoded(){
     int i;
     BSTREE *temp;
 
-    printf("\n\tChar\tBinary\n");
+    //printf("\n\tChar\tBinary\n");
     for(i = 0; i < 255; i++){
-       if(strcmp(decoded[i], "") != 0){
-            printf("\t%c\t%s\n",i, decoded[i]);
-            insert(i, decoded[i]);
+       if(strcmp(huffcode_bin[i], "") != 0){
+            //printf("\t%c\t%s\n",i, huffcode_bin[i]);
+            insert(i, huffcode_bin[i]);
        }
     }
 }

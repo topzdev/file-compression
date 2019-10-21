@@ -3,6 +3,8 @@
 #include <string.h>
 #include <windows.h>
 #define MAX 100
+#define FILE_EXTENSION ".hufzip"
+#define TEMP_FILE "temp.huftmp"
 
 typedef struct bsnode {
    int data;
@@ -12,105 +14,136 @@ typedef struct bsnode {
    struct bsnode *rightChild;
 } BSTREE;
 
-typedef struct node{
-	char data;
-	unsigned int freq;
-	struct node *left, *right;
-}TREE;
-
-typedef struct nodeArr{
-	unsigned int size;
-	unsigned int capacity;
-	struct node** array;
-}TREE_ARR;
-
-TREE *root;
-TREE_ARR *collection;
-BSTREE *bsr;
-int search(const char x[]);
-
 int arr[MAX];
-char encoded[255][50];
+char huffcode_bin[255][50];
 
-void makeNull(){
-    root = NULL;
-}
+BSTREE *bsr;
+FILE *retrieve_file, *temp_file, *decompress_file;
+
+//decleration of functions
+void set_to_blank();
+void decompress_data(char[]);
+const char * dec_to_bin(int);
+void insert_binary_tree();
+void insert(int, const char[]);
+int search(const char[]);
 
 
 int main(){
-    makeNull();
     char filePath[50];
     printf("Enter the filepath to decompress here: ");
     scanf("%s", &filePath);
-    decompress(filePath);
+    decompress_data(filePath);
     return 0;
 }
 
-void setToBlank(){
+void decompress_data(char file_path[]){
+    set_to_blank();
+    int ch, i;
+    char org_path[255], bin[255], char_arr[255], total_char, temp;
+    strcpy(org_path,file_path);
+
+    printf("\nFinding the given path...");
+    retrieve_file = fopen(strcat(org_path,FILE_EXTENSION), "rb");
+    temp_file = fopen(TEMP_FILE, "wb");
+    decompress_file = fopen(file_path,"wb");
+
+
+    if (retrieve_file == NULL){
+        printf("\nFile path not found...");
+    }
+    else{
+        printf("\nFile path sucessfully found...");
+        for(i = 0; i < 256; i++){
+            char_arr[i] = 0;
+         }
+
+
+        printf("\nDecompressing the file...");
+        total_char = fgetc(retrieve_file);
+        for(i= 0; i<total_char; i++){
+            ch = fgetc(retrieve_file);
+            if(ch != 13){
+               char_arr[ch] = 1;
+            }
+        }
+
+        for(i = 0; i < 256; i++){
+           if(char_arr[i] != 0){
+                fscanf(retrieve_file, "%s ",huffcode_bin[i]);
+           }
+        }
+
+        insert_binary_tree();
+
+        while(!feof(retrieve_file)){
+
+            ch = fgetc(retrieve_file);
+
+            if(ch != -1){
+                fprintf(temp_file,"%s",dec_to_bin(ch));
+            }
+        }
+
+        fclose(temp_file);
+
+
+
+        printf("\nThe file is extracting the compressed data...");
+        int n_ch = 0,  ret = -1;
+        char temps[255];
+        temp_file = fopen(TEMP_FILE, "r");
+        i = 0;
+        while(!feof(temp_file)){
+            if(ret == -1){
+
+                n_ch = fgetc(temp_file);
+                temps[i] = (char)(n_ch);
+                i++;
+                temps[i] = '\0';
+                ret = search(temps);
+            }
+            else{
+                i = 0;
+                fputc(ret, decompress_file);
+                ret = -1;
+                strcpy(temps, "");
+            }
+        }
+        printf("\nThe file successfully decompressed...");
+    }
+
+    fclose(temp_file);
+    fclose(retrieve_file);
+    fclose(decompress_file);
+    remove(TEMP_FILE);
+}
+
+void set_to_blank(){
     int i;
     for(i = 0; i<255; i++){
-        strcpy(encoded[i], "");
+        strcpy(huffcode_bin[i], "");
     }
 }
 
-FILE *file, *retrieve, *retVar, *orig;
-
-void decompress(char file_path[]){
-    setToBlank();
-    printf("%s", file_path);
-
-    retrieve = fopen(strcat(file_path,".huf"), "rb");
-    retVar = fopen(strcat(file_path,".var"), "rb");
-    orig = fopen(strcat(file_path,".org"),"wb");
-    if(retrieve != NULL && retVar != NULL){
-        int ch;
-        char bin[255];
-        while(!feof(retVar)){
-            fscanf(retVar,"%d %s ", &ch, bin);
-            printf("%d %s ", ch, bin);
-            strcpy(encoded[ch],bin);
-        }
-        showDecoded();
-        printf("\nTHE DECODED VALUE IS ================================================\n");
-        int i = 0, n_ch = 0,  ret = -1;
-        char temp[255], sh;
-        while(!feof(retrieve)){
-            if(ret == -1){
-                n_ch = fgetc(retrieve);
-                //printf("\nletter retrieve %c", n_ch);
-                temp[i] = (char)(n_ch);
-                i++;
-                temp[i] = '\0';
-                ret = search(temp);
-                //printf("\nvalue of ret is %c\n", ret);
-            }else{
-                i = 0;
-                printf("%c", ret);
-                fprintf(orig, "%c", (char)(ret));
-                ret = -1;
-                strcpy(temp, "");
-            }
-
-
-        }
+const char * dec_to_bin(int value){
+    int i;
+    static char bits[8];
+    for (int bit = 8; bit; --bit) {
+       i = (value & (1 << (bit - 1)) ? '1' : '0');
+       bits[8 - bit] = (char)(i);
     }
-    getch();
-    fclose(retrieve);
-    fclose(retVar);
-    fclose(orig);
-    getch();
+    bits[8] = '\0';
+    return bits;
 }
 
-
-void showDecoded(){
+void insert_binary_tree(){
     int i;
     BSTREE *temp;
 
-    printf("\n\tChar\tBinary\n");
     for(i = 0; i < 255; i++){
-       if(strcmp(encoded[i], "") != 0){
-            printf("\t%c\t%s\n",i, encoded[i]);
-            insert(i, encoded[i]);
+       if(strcmp(huffcode_bin[i], "") != 0){
+            insert(i, huffcode_bin[i]);
        }
     }
 }
@@ -126,6 +159,7 @@ void insert(int x, const char bin[]) {
    newNode->leftChild = NULL;
    newNode->rightChild = NULL;
    //if BSTREE is empty
+
    if(bsr == NULL) {
       bsr = newNode;
    } else {
@@ -161,10 +195,10 @@ void insert(int x, const char bin[]) {
 int search(const char x[]) {
    BSTREE *current = bsr;
    int x_len = strlen(x);
-   //printf("\nsearch is %s", x);
+  // printf("\nsearch is %s", x);
 
    while(current->len != x && strcmp(current->bin, x) != 0) {
-       //printf("\nhello there %s %s %c", current->bin, x, current->data);
+    //   printf("\nhello there %s %s %c", current->bin, x, current->data);
       if(current != NULL)
 
       //go to left BSTREE
